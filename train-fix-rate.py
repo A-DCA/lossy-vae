@@ -6,6 +6,8 @@ from lvae.datasets.image import get_image_dateset
 from lvae.evaluation import image_self_evaluate
 
 
+#JMA
+
 def parse_args():
     # ====== set the run settings ======
     parser = argparse.ArgumentParser()
