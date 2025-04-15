@@ -5,7 +5,6 @@ from lvae.trainer import BaseTrainingWrapper
 from lvae.datasets.image import get_image_dateset
 from lvae.evaluation import image_self_evaluate
 
-
 def parse_args():
     # ====== set the run settings ======
     parser = argparse.ArgumentParser()
