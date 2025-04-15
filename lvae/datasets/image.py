@@ -2,6 +2,10 @@ from PIL import Image
 from pathlib import Path
 from torch.utils.data import Dataset
 import torchvision as tv
+import numpy as np
+
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 from lvae.paths import known_datasets
 
@@ -44,6 +48,16 @@ def get_image_dateset(name: str, transform_cfg: str=None) -> Dataset:
         if transform_cfg.get('hflip', False):
             t = tv.transforms.RandomHorizontalFlip(p=0.5)
             transform.append(t)
+        if transform_cfg.get('vflip', False):
+            t = tv.transforms.RandomVerticalFlip(p=0.5)
+            transform.append(t)
+        if transform_cfg.get('rndRot', False):
+            degree = transform_cfg['rndRot']
+            t= tv.transforms.RandomRotation(degrees=degree)
+            transform.append(t)
+            t=tv.transforms.RandomAffine(degrees=degree, translate=(0.1, 0.1), scale=(0.9, 1.1))
+            transform.append(t)
+                
     transform.append(tv.transforms.ToTensor())
     transform = tv.transforms.Compose(transform)
 

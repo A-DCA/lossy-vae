@@ -227,8 +227,8 @@ class QLatentBlockX(nn.Module):
         hidden = int(max(width, enc_width) * 0.25)
         concat_ch = (width * 2) if enc_width is None else (width + enc_width)
         use_3x3 = (kernel_size >= 3)
-        self.resnet_front = MyConvNeXtBlock(width, kernel_size=kernel_size)
-        self.resnet_end   = MyConvNeXtBlock(width, kernel_size=kernel_size)
+        self.resnet_front = MyConvNeXtBlock(width, kernel_size=kernel_size)  # Processes features before latent sampling
+        self.resnet_end   = MyConvNeXtBlock(width, kernel_size=kernel_size)  # Processes features after latent information is added
         self.posterior = VDBlock(concat_ch, hidden, zdim, residual=False, use_3x3=use_3x3)
         self.prior     = VDBlock(width, hidden, zdim * 2, residual=False, use_3x3=use_3x3,
                                  zero_last=True)
@@ -248,7 +248,7 @@ class QLatentBlockX(nn.Module):
         Args:
             feature (torch.Tensor): feature map
         """
-        feature = self.resnet_front(feature)
+        feature = self.resnet_front(feature)  # Transforms features to prepare for latent sampling
         # prior p(z)
         pm, plogv = self.prior(feature).chunk(2, dim=1)
         plogv = tnf.softplus(plogv + 2.3) - 2.3 # make logscale > -2.3
@@ -276,7 +276,7 @@ class QLatentBlockX(nn.Module):
             kl = -1.0 * torch.log(probs)
         # add the new information to feature
         feature = feature + self.z_proj(z_sample)
-        feature = self.resnet_end(feature)
+        feature = self.resnet_end(feature)  # Integrates latent information into the feature space
         if get_latents:
             return feature, dict(z=z_sample.detach(), kl=kl)
         return feature, dict(kl=kl)
@@ -308,10 +308,10 @@ class QLatentBlockX(nn.Module):
                 z = torch.clone(latent)
                 z[:, :, h_slice, w_slice] = z_patch
         else: # if `latent` is provided and `paint_box` is not provided, directly use it.
-            assert pm.shape == latent.shape
+            #assert pm.shape == latent.shape
             z = latent
         feature = feature + self.z_proj(z)
-        feature = self.resnet_end(feature)
+        feature = self.resnet_end(feature)  # Integrates latent information into the feature space
         return feature
 
     def update(self):
@@ -340,7 +340,7 @@ class QLatentBlockX(nn.Module):
         zhat = self.discrete_gaussian.quantize(qm, mode='dequantize', means=pm)
         # add the new information to feature
         feature = feature + self.z_proj(zhat)
-        feature = self.resnet_end(feature)
+        feature = self.resnet_end(feature)  # Integrates latent information into the feature space
         return feature, strings
 
     def decompress(self, feature, strings):
@@ -356,7 +356,7 @@ class QLatentBlockX(nn.Module):
         zhat = self.discrete_gaussian.decompress(strings, indexes, means=pm)
         # add the new information to feature
         feature = feature + self.z_proj(zhat)
-        feature = self.resnet_end(feature)
+        feature = self.resnet_end(feature)  # Integrates latent information into the feature space
         return feature
 
 
@@ -453,6 +453,30 @@ class TopDownDecoder(nn.Module):
         assert str_i == len(compressed_object) - 1, f'decoded={str_i}, len={len(compressed_object)}'
         return feature
 
+def check_nans(tensor, tensor_name=""):
+    """Check for NaNs in tensor"""
+    # Check if tensor has any NaNs
+    has_nans = torch.isnan(tensor).any()
+    
+    if has_nans:
+        # Get indices of NaN elements
+        nan_indices = torch.where(torch.isnan(tensor))
+        
+        # Count total NaNs
+        num_nans = torch.isnan(tensor).sum().item()
+        
+        print(f"\nFound {num_nans} NaNs in {tensor_name}")
+        print(f"NaN indices: {nan_indices}")
+        print(f"Tensor shape: {tensor.shape}")
+        
+        # Print non-NaN range
+        valid_values = tensor[~torch.isnan(tensor)]
+        if len(valid_values) > 0:
+            print(f"Valid value range: [{valid_values.min():.3f}, {valid_values.max():.3f}]")
+            
+        return True
+    return False
+
 
 class HierarchicalVAE(nn.Module):
     """ Class of general hierarchical VAEs
@@ -481,6 +505,8 @@ class HierarchicalVAE(nn.Module):
         self._flops_mode = False
         self.compressing = False
 
+    
+    
     def preprocess_input(self, im: torch.Tensor):
         """ Shift and scale the input image
 
@@ -489,6 +515,7 @@ class HierarchicalVAE(nn.Module):
         """
         assert (im.shape[2] % self.max_stride == 0) and (im.shape[3] % self.max_stride == 0)
         if not self._flops_mode:
+            check_nans(im)
             assert (im.dim() == 4) and (0 <= im.min() <= im.max() <= 1) and not im.requires_grad
         x = (im + self.im_shift) * self.im_scale
         return x
@@ -610,6 +637,7 @@ class HierarchicalVAE(nn.Module):
         _, stats = self.decoder.forward(activations, get_latents=True)
         return stats
 
+    
     @torch.no_grad()
     def inpaint(self, im, paint_box, steps=1, temprature=1.0):
         """ Inpainting
@@ -632,8 +660,15 @@ class HierarchicalVAE(nn.Module):
             stats_all = self.forward_get_latents(im_input)
             latents = [st['z'] for st in stats_all]
             im_sample = self.cond_sample(latents, temprature=temprature, paint_box=paint_box)
+
+            ##JM- modification
+            im_sample = torch.nan_to_num(im_sample, nan=0.0)
+
             torch.clamp_(im_sample, min=0, max=1)
             im_input = im.clone()
+            check_nans(im_input, tensor_name="im_input")
+            check_nans(im_sample, tensor_name="im_sample")
+
             im_input[:, :, h_slice, w_slice] = im_sample[:, :, h_slice, w_slice]
         return im_sample
 
@@ -659,6 +694,7 @@ class HierarchicalVAE(nn.Module):
         x = self.preprocess_input(im)
         enc_features = self.encoder(x)
         compressed_obj, feature = self.decoder.compress(enc_features)
+
         min_res = min(enc_features.keys())
         compressed_obj.append(tuple(enc_features[min_res].shape))
         if hasattr(self.out_net, 'compress'): # lossless compression

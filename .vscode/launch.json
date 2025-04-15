@@ -1,0 +1,29 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                // "--config", "jm-extenison/ss2clusters_ms/configs/improved_config.py", 
+                // "--feature_mode", "multi_scale",
+                // "--mapper_type", "improved2",
+                // "--cluster_type", "spherekmeans",
+                "--experiment_path", "jm-extenison/ss2clusters_ms/experiments/improved_TFCr_multi_scale_improved2_spherekmeans_1"
+             ],
+        //     "args": [
+        //         "--iterations", "10", 
+        //         "--model", "qres34mplus",
+        //         "--transform", "crop=256,hflip=True,vflip=True,rndRot=25",
+        // ],
+
+        }
+    ]
+}

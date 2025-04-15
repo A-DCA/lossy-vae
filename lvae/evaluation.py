@@ -82,7 +82,7 @@ def image_self_evaluate(model: torch.nn.Module, dataset: str, progress=True):
     device = next(model.parameters()).device
     # find images
     root = known_datasets.get(dataset, Path(dataset))
-    img_paths = sorted(root.rglob('*.*'))
+    img_paths = sorted(Path(root).rglob('*.*'))
     # evaluate on all images and average the results
     pbar = tqdm(img_paths, ascii=True) if progress else img_paths
     all_image_stats = defaultdict(AverageMeter)

@@ -155,3 +155,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+#jma othr staff
+datasets/
+hierachical-latent/
+jm-extension/
+results/
+runs/
+images/
+data/
+
+
